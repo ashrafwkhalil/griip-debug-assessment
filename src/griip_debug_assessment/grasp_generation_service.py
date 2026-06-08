@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import itertools
 import threading
-import time
 from collections.abc import Callable
 
-from griip_debug_assessment.models import Grasp, Image
+from griip_debug_assessment.mocks import MockImageProcessor
+from griip_debug_assessment.models import Image
 from griip_debug_assessment.pick_queue import PickQueue
 
 
@@ -13,11 +13,11 @@ class GraspGenerationService:
     def __init__(
         self,
         grasps_per_image: int,
-        grasp_delay_seconds: float,
+        image_processor: MockImageProcessor,
         log: Callable[[str], None] | None = None,
     ) -> None:
         self._grasps_per_image = grasps_per_image
-        self._grasp_delay_seconds = grasp_delay_seconds
+        self._image_processor = image_processor
         self._log = log
         self._grasp_id_counter = itertools.count(start=1)
         self._lock = threading.Lock()
@@ -51,12 +51,10 @@ class GraspGenerationService:
 
     def _generate_grasps(self, image: Image, queue: PickQueue) -> None:
         for grasp_index in range(self._grasps_per_image):
-            time.sleep(self._grasp_delay_seconds)
-
-            grasp = Grasp(
+            grasp = self._image_processor.process_image_and_generate_grasp(
+                image=image,
                 grasp_id=next(self._grasp_id_counter),
-                image_id=image.image_id,
-                score=1.0 - (grasp_index * 0.01),
+                grasp_index=grasp_index,
             )
             queue.push(grasp)
             self._emit(f"grasp generation: queued grasp {grasp.grasp_id} from image {image.image_id}")

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from griip_debug_assessment.grasp_generation_service import GraspGenerationService
 from griip_debug_assessment.mocks import MockCamera, MockRobot
-from griip_debug_assessment.models import CycleResult
+from griip_debug_assessment.models import CycleResult, Grasp
 from griip_debug_assessment.pick_queue import PickQueue
 
 
@@ -34,13 +34,7 @@ class PickingManager:
         self._grasp_generation_service.start_generation(image=image, queue=self._queue)
 
         self._emit(f"manager: waiting for grasp for image {image.image_id}")
-        grasp = self._queue.wait_for_grasp(timeout_seconds=self._grasp_timeout_seconds)
-
-        if grasp is not None:
-            self._emit(f"manager: received grasp {grasp.grasp_id} from image {grasp.image_id}")
-            self._robot.execute_pick(grasp)
-        else:
-            self._emit(f"manager: no grasp ready for image {image.image_id}")
+        grasp = self._execute_next_available_grasp(image_id=image.image_id)
 
         self._emit("manager: clearing pick queue")
         self._queue.clear()
@@ -53,6 +47,22 @@ class PickingManager:
 
     def shutdown(self, join_timeout_seconds: float | None) -> None:
         self._grasp_generation_service.join_all(timeout_seconds=join_timeout_seconds)
+
+    def _execute_next_available_grasp(self, image_id: int) -> Grasp | None:
+        grasp = self._queue.wait_for_grasp(timeout_seconds=self._grasp_timeout_seconds)
+
+        if grasp is None:
+            self._emit(f"manager: no grasp ready for image {image_id}")
+            return None
+
+        self._emit(f"manager: received grasp {grasp.grasp_id} from image {grasp.image_id}")
+
+        if not self._robot.execute_pick(grasp):
+            self._emit(f"manager: grasp {grasp.grasp_id} failed; waiting for another grasp")
+            return self._execute_next_available_grasp(image_id=image_id)
+
+        self._robot.place_object(grasp)
+        return grasp
 
     def _emit(self, message: str) -> None:
         if self._log is not None:

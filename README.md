@@ -6,9 +6,10 @@ The system is intentionally simplified:
 
 - `MockRobot` simulates robot motion with blocking timed calls.
 - `MockCamera` simulates image capture with blocking timed calls.
+- `MockImageProcessor` simulates blocking image processing and grasp generation.
 - `GraspGenerationService` simulates asynchronous grasp generation in background threads.
 - `PickQueue` stores grasps that are ready for execution.
-- `PickingManager` coordinates image capture, grasp generation, and pick execution.
+- `PickingManager` coordinates image capture, grasp generation, pick retries, and placement.
 
 The high-level flow is:
 
@@ -17,7 +18,9 @@ The high-level flow is:
 3. Start generating grasps for that image.
 4. Wait for a grasp to become available.
 5. Execute the pick.
-6. Repeat the cycle.
+6. If the pick fails, wait for another grasp and try again.
+7. If the pick succeeds, place the object.
+8. Repeat the cycle.
 
 ## Setup
 
